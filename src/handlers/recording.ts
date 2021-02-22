@@ -1,6 +1,6 @@
 import childProcess from 'child_process';
-import { concat, EMPTY, merge, Observable } from 'rxjs';
-import { catchError, concatMap, filter, finalize, ignoreElements, map } from 'rxjs/operators';
+import { concat, EMPTY, merge, Observable, timer } from 'rxjs';
+import { catchError, concatMap, delay, filter, finalize, ignoreElements, map, take } from 'rxjs/operators';
 import { HIDClient } from '../hid-client';
 
 enum InputMessage {
@@ -16,6 +16,15 @@ const sendQuery = (client: HIDClient) => client.write(Buffer.of(OutputMessage.RE
 
 const sendAck = (client: HIDClient, recording: boolean) =>
   client.write(Buffer.of(OutputMessage.RECORDING_ACK, +recording));
+
+const STARTUP_HELLO_INTERVAL = 500;
+
+const sendStartupHello = (client: HIDClient) =>
+  timer(0, STARTUP_HELLO_INTERVAL).pipe(
+    take(5),
+    concatMap((i) => sendAck(client, !!(i % 2))),
+    delay(STARTUP_HELLO_INTERVAL),
+  );
 
 const unmute = (unmute: boolean) =>
   new Promise<void>((resolve, reject) => {
@@ -46,7 +55,7 @@ const processUpdates = (client: HIDClient) =>
   );
 
 export const recordingHandler = (client: HIDClient): Observable<never> =>
-  merge(processUpdates(client), sendQuery(client)).pipe(
+  concat(sendStartupHello(client), merge(processUpdates(client), sendQuery(client))).pipe(
     ignoreElements(),
     finalize(() => unmute(true)),
   );
