@@ -1,5 +1,5 @@
-import { defer, EMPTY, Observable, ReplaySubject } from 'rxjs';
-import { catchError, repeat, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { defer, Observable, ReplaySubject, timer } from 'rxjs';
+import { catchError, ignoreElements, repeat, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { recordingHandler } from './handlers/recording';
 import { HIDClient } from './hid-client';
 
@@ -19,7 +19,7 @@ const main$: Observable<any> = defer(() => {
   switchMap((client) => recordingHandler(client)),
   catchError((error) => {
     console.error('ERROR:', error);
-    return EMPTY;
+    return timer(1000).pipe(ignoreElements());
   }),
   repeat(),
   takeUntil(interruptedSubject),
