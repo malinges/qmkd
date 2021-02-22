@@ -1,12 +1,21 @@
 import childProcess from 'child_process';
-import { merge, Observable, of, timer } from 'rxjs';
-import { concatMap, distinctUntilChanged, filter, finalize, ignoreElements, map, mapTo, tap } from 'rxjs/operators';
+import { concat, EMPTY, merge, Observable } from 'rxjs';
+import { catchError, concatMap, filter, finalize, ignoreElements, map } from 'rxjs/operators';
 import { HIDClient } from '../hid-client';
 
-enum MessageType {
-  HELLO,
-  HEARTBEAT,
+enum InputMessage {
+  RECORDING_UPDATE,
 }
+
+enum OutputMessage {
+  RECORDING_QUERY,
+  RECORDING_ACK,
+}
+
+const sendQuery = (client: HIDClient) => client.write(Buffer.of(OutputMessage.RECORDING_QUERY));
+
+const sendAck = (client: HIDClient, recording: boolean) =>
+  client.write(Buffer.of(OutputMessage.RECORDING_ACK, +recording));
 
 const unmute = (unmute: boolean) =>
   new Promise<void>((resolve, reject) => {
@@ -22,21 +31,22 @@ const unmute = (unmute: boolean) =>
     });
   });
 
-const sendHeartbeats = (client: HIDClient): Observable<never> =>
-  merge(of(MessageType.HELLO), timer(100, 4000).pipe(mapTo(MessageType.HEARTBEAT))).pipe(
-    tap((type) => client.write(Buffer.from([type]))),
-    ignoreElements(),
-  );
-
-const muteUnmute = (client: HIDClient): Observable<never> =>
+const processUpdates = (client: HIDClient) =>
   client.data().pipe(
-    filter((buffer) => buffer.length >= 2 && buffer[0] === 1),
+    filter((buffer) => buffer.length >= 2 && buffer[0] === InputMessage.RECORDING_UPDATE),
     map((buffer) => buffer[1] !== 0),
-    distinctUntilChanged(),
-    concatMap(unmute),
-    ignoreElements(),
-    finalize(() => unmute(true)),
+    concatMap((recording) =>
+      concat(unmute(recording), sendAck(client, recording)).pipe(
+        catchError((err) => {
+          console.error('Failed to process update:', err);
+          return EMPTY;
+        }),
+      ),
+    ),
   );
 
 export const recordingHandler = (client: HIDClient): Observable<never> =>
-  merge(sendHeartbeats(client), muteUnmute(client));
+  merge(processUpdates(client), sendQuery(client)).pipe(
+    ignoreElements(),
+    finalize(() => unmute(true)),
+  );

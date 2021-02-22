@@ -1,5 +1,5 @@
 import HID from 'node-hid';
-import { defer, merge, Observable, of, Subject } from 'rxjs';
+import { defer, merge, Observable, of, Subject, throwError } from 'rxjs';
 import { delay, filter, finalize, first, ignoreElements, repeat, switchMap } from 'rxjs/operators';
 import usbDetection from 'usb-detection';
 
@@ -58,6 +58,8 @@ export class HIDClient {
 
   private readonly _errorSubject = new Subject<never>();
 
+  private readonly _writeBufferPrefix = Buffer.from([0]);
+
   readonly deviceName: string;
 
   private constructor(device: HID.Device) {
@@ -71,10 +73,15 @@ export class HIDClient {
     return this._data$;
   }
 
-  private readonly _writeBufferPrefix = Buffer.from([0]);
-
-  write(buffer: Buffer) {
-    this._hid.write(Buffer.concat([this._writeBufferPrefix, buffer]));
+  write(buffer: Buffer): Observable<void> {
+    return defer(() => {
+      try {
+        this._hid.write(Buffer.concat([this._writeBufferPrefix, buffer]));
+      } catch (error) {
+        return throwError(error);
+      }
+      return of(undefined);
+    });
   }
 
   private _close() {
