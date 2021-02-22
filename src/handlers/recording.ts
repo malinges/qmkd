@@ -46,8 +46,8 @@ const processUpdates = (client: HIDClient) =>
     map((buffer) => buffer[1] !== 0),
     concatMap((recording) =>
       concat(unmute(recording), sendAck(client, recording)).pipe(
-        catchError((err) => {
-          console.error('Failed to process update:', err);
+        catchError((error) => {
+          console.error('Failed to process recording update:', error);
           return EMPTY;
         }),
       ),
