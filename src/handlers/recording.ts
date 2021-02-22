@@ -1,4 +1,4 @@
-import childProcess from 'child_process';
+import child_process from 'child_process';
 import { concat, EMPTY, merge, Observable, timer } from 'rxjs';
 import { catchError, concatMap, delay, filter, finalize, ignoreElements, map, take } from 'rxjs/operators';
 import { HIDClient } from '../hid-client';
@@ -29,14 +29,14 @@ const sendStartupHello = (client: HIDClient) =>
 const unmute = (unmute: boolean) =>
   new Promise<void>((resolve, reject) => {
     console.log('Recording:', unmute);
-    childProcess.exec(`osascript -e "set volume input volume ${unmute ? 100 : 0}"`, (err, stdout, stderr) => {
-      if (err) {
-        console.error('Failed to set input volume:', err);
-        console.error('Command stdout:', stdout);
-        console.error('Command stderr:', stderr);
-        return reject(err);
-      }
-      resolve();
+    const proc = child_process.spawn('osascript', ['-e', `set volume input volume ${unmute ? 100 : 0}`], {
+      stdio: 'inherit',
+    });
+    proc.once('error', (error) => reject(error));
+    proc.once('exit', (code) => {
+      if (code === 0) resolve();
+      else if (code) reject(new Error(`Command exited with code ${code}`));
+      else reject(new Error(`Command was killed by signal ${proc.signalCode}`));
     });
   });
 
