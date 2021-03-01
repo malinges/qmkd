@@ -1,16 +1,8 @@
 import child_process from 'child_process';
 import { concat, EMPTY, merge, Observable, timer } from 'rxjs';
 import { catchError, concatMap, delay, filter, finalize, ignoreElements, map, take } from 'rxjs/operators';
+import { InputMessage, OutputMessage } from '.';
 import { HIDClient } from '../hid-client';
-
-enum InputMessage {
-  RECORDING_UPDATE,
-}
-
-enum OutputMessage {
-  RECORDING_QUERY,
-  RECORDING_ACK,
-}
 
 const sendQuery = (client: HIDClient) => client.write(Buffer.of(OutputMessage.RECORDING_QUERY));
 

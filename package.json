@@ -10,6 +10,7 @@
   "author": "Simon Malinge <simon.malinge@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "influx": "^5.7.0",
     "node-hid": "^2.1.1",
     "rxjs": "^6.6.3",
     "usb-detection": "^4.10.0"
