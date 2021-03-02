@@ -1,6 +1,6 @@
 import * as Influx from 'influx';
 import { defer, Observable } from 'rxjs';
-import { bufferTime, filter, ignoreElements, map, mergeMap, tap } from 'rxjs/operators';
+import { bufferTime, filter, ignoreElements, map, mergeMap } from 'rxjs/operators';
 import { InputMessage } from '.';
 import { HIDClient } from '../hid-client';
 
@@ -14,16 +14,18 @@ const processUpdates = (client: HIDClient) =>
       }
     });
 
+    const { INFLUX_HOST, INFLUX_USERNAME, INFLUX_PASSWORD, INFLUX_DATABASE, INFLUX_MEASUREMENT } = process.env;
+
     const influx = new Influx.InfluxDB({
-      host: process.env.INFLUX_HOST!,
-      username: process.env.INFLUX_USERNAME!,
-      password: process.env.INFLUX_PASSWORD!,
-      database: process.env.INFLUX_DATABASE!,
+      host: INFLUX_HOST!,
+      username: INFLUX_USERNAME!,
+      password: INFLUX_PASSWORD!,
+      database: INFLUX_DATABASE!,
       schema: [
         {
-          measurement: process.env.INFLUX_MEASUREMENT!,
+          measurement: INFLUX_MEASUREMENT!,
           fields: {
-            wpm: Influx.FieldType.INTEGER,
+            n: Influx.FieldType.INTEGER,
           },
           tags: [],
         },
@@ -31,11 +33,10 @@ const processUpdates = (client: HIDClient) =>
     });
 
     return client.data().pipe(
-      filter((buffer) => buffer.length >= 2 && buffer[0] === InputMessage.WPM_UPDATE),
-      map<Buffer, Influx.IPoint>((buf) => ({ fields: { wpm: buf[1] }, timestamp: new Date() })),
-      tap((point) => console.log('WPM:', point.fields?.wpm)),
+      filter((buffer) => buffer.length >= 1 && buffer[0] === InputMessage.WPM_KEYPRESS),
+      map<Buffer, Influx.IPoint>((buf) => ({ fields: { n: 1 }, timestamp: new Date() })),
       bufferTime(1000),
-      mergeMap((points) => influx.writeMeasurement('wpm', points)),
+      mergeMap((points) => influx.writeMeasurement(INFLUX_MEASUREMENT!, points)),
     );
   });
 
