@@ -1,6 +1,6 @@
 import * as Influx from 'influx';
 import { defer, Observable } from 'rxjs';
-import { filter, ignoreElements, map, mergeMap, tap } from 'rxjs/operators';
+import { bufferTime, filter, ignoreElements, map, mergeMap, tap } from 'rxjs/operators';
 import { InputMessage } from '.';
 import { HIDClient } from '../hid-client';
 
@@ -32,18 +32,10 @@ const processUpdates = (client: HIDClient) =>
 
     return client.data().pipe(
       filter((buffer) => buffer.length >= 2 && buffer[0] === InputMessage.WPM_UPDATE),
-      map((buf) => buf[1]),
-      mergeMap(async (wpm) => {
-        await influx.writeMeasurement('wpm', [
-          {
-            fields: { wpm },
-            timestamp: new Date(),
-          },
-        ]);
-
-        return wpm;
-      }),
-      tap((wpm) => console.log('WPM:', wpm)),
+      map<Buffer, Influx.IPoint>((buf) => ({ fields: { wpm: buf[1] }, timestamp: new Date() })),
+      tap((point) => console.log('WPM:', point.fields?.wpm)),
+      bufferTime(1000),
+      mergeMap((points) => influx.writeMeasurement('wpm', points)),
     );
   });
 
