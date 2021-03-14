@@ -7,7 +7,7 @@ export const debugConsole = (client: HIDClient) =>
     scan((lastPending, received) => {
       const lines = (lastPending + received).split(/(?:\r|\n|\r\n)/);
       const pending = lines.pop()!;
-      lines.forEach((line) => process.stdout.write('[console] ' + line));
+      lines.forEach((line) => console.log(`[console] ${line}`));
       return pending;
     }, ''),
     ignoreElements(),
