@@ -1,29 +1,48 @@
 import { defer, merge, Observable, ReplaySubject, timer } from 'rxjs';
 import { catchError, ignoreElements, repeat, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { debugConsole } from './handlers/debug-console';
 import { recordingHandler } from './handlers/recording';
 import { wpmHandler } from './handlers/wpm';
-import { HIDClient } from './hid-client';
+import { DeviceFilter, HIDClient } from './hid-client';
 
-const VENDOR_ID = 0x4b50;
-const PRODUCT_ID = 0xef8d;
-const USAGE_PAGE = 0xff60;
-const USAGE_ID = 0x61;
+interface DevicePipe {
+  name: string;
+  filter: DeviceFilter;
+  onConnected: (client: HIDClient) => Observable<any>;
+}
+
+const PIPES: DevicePipe[] = [
+  {
+    name: 'rawhid',
+    filter: { usagePage: 0xff60, usage: 0x61 },
+    onConnected: (client) => merge(recordingHandler(client), wpmHandler(client)),
+  },
+  {
+    name: 'console',
+    filter: { usagePage: 0xff31, usage: 0x74 },
+    onConnected: (client) => debugConsole(client),
+  },
+];
 
 const interruptedSubject = new ReplaySubject<void>(1);
 process.on('SIGINT', () => interruptedSubject.next());
 
-const main$: Observable<any> = defer(() => {
-  console.log('Looking for device...');
-  return HIDClient.connect(VENDOR_ID, PRODUCT_ID, USAGE_PAGE, USAGE_ID);
-}).pipe(
-  tap((client) => console.log(`Found device: ${client.deviceName}`)),
-  switchMap((client) => merge(recordingHandler(client), wpmHandler(client))),
-  catchError((error) => {
-    console.error('ERROR:', error);
-    return timer(1000).pipe(ignoreElements());
-  }),
-  repeat(),
-  takeUntil(interruptedSubject),
+const main$: Observable<any> = merge(
+  ...PIPES.map((pipe) =>
+    defer(() => {
+      console.log(`[${pipe.name}] Looking for device...`);
+      return HIDClient.connect(pipe.filter);
+    }).pipe(
+      tap((client) => console.log(`[${pipe.name}] Found device: ${client.deviceName}`)),
+      switchMap(pipe.onConnected),
+      catchError((error) => {
+        console.error(`[${pipe.name}] ERROR:`, error);
+        return timer(1000).pipe(ignoreElements());
+      }),
+      repeat(),
+      takeUntil(interruptedSubject),
+    ),
+  ),
 );
 
 main$.subscribe();

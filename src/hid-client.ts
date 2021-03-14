@@ -1,49 +1,43 @@
 import HID from 'node-hid';
-import { defer, merge, Observable, of, Subject, throwError } from 'rxjs';
-import { delay, filter, finalize, first, ignoreElements, repeat, switchMap } from 'rxjs/operators';
+import { defer, from, merge, Observable, of, Subject, throwError } from 'rxjs';
+import { delay, finalize, first, repeat, repeatWhen, shareReplay, switchMap } from 'rxjs/operators';
 import usbDetection from 'usb-detection';
 
-const connectedDevices$: Observable<HID.Device[]> = defer(() => of(HID.devices()));
+export interface DeviceFilter {
+  vendorId?: number;
+  productId?: number;
+  usagePage?: number;
+  usage?: number;
+}
 
 const deviceAddEventsSubject = new Subject<usbDetection.Device>();
 usbDetection.startMonitoring();
 process.on('beforeExit', () => usbDetection.stopMonitoring());
 usbDetection.on('add', (device) => deviceAddEventsSubject.next(device));
-const deviceAddEvents$ = deviceAddEventsSubject.asObservable();
+const deviceAddEvents$ = deviceAddEventsSubject.pipe(delay(100));
 
-const locateDevice = (
-  vendorId: number,
-  productId: number,
-  usagePage: number,
-  usageId: number,
-): Observable<HID.Device> => {
+const connectedDevices$: Observable<HID.Device[]> = defer(() => of(HID.devices())).pipe(
+  repeatWhen(() => deviceAddEvents$),
+  shareReplay({ refCount: true, bufferSize: 1 }),
+);
+
+const locateDevice = (deviceFilter: DeviceFilter): Observable<HID.Device> => {
   return connectedDevices$.pipe(
-    switchMap((devices) => {
-      const device = devices.find(
-        (device) =>
-          device.vendorId === vendorId &&
-          device.productId === productId &&
-          device.usagePage === usagePage &&
-          device.usage === usageId,
-      );
-
-      if (device) return of(device);
-
-      return deviceAddEvents$.pipe(
-        filter((device) => device.vendorId === vendorId && device.productId === productId),
-        first(),
-        delay(100),
-        ignoreElements(),
-      );
-    }),
+    switchMap((devices) => from(devices)),
     repeat(),
-    first(),
+    first(
+      (device) =>
+        (deviceFilter.vendorId == null || device.vendorId === deviceFilter.vendorId) &&
+        (deviceFilter.productId == null || device.productId === deviceFilter.productId) &&
+        (deviceFilter.usagePage == null || device.usagePage === deviceFilter.usagePage) &&
+        (deviceFilter.usage == null || device.usage === deviceFilter.usage),
+    ),
   );
 };
 
 export class HIDClient {
-  static connect(vendorId: number, productId: number, usagePage: number, usageId: number): Observable<HIDClient> {
-    return locateDevice(vendorId, productId, usagePage, usageId).pipe(
+  static connect(deviceFilter: DeviceFilter): Observable<HIDClient> {
+    return locateDevice(deviceFilter).pipe(
       switchMap((device) => {
         const client = new HIDClient(device);
         return merge(of(client), client._errorSubject).pipe(finalize(() => client._close()));

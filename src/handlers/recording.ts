@@ -20,7 +20,7 @@ const sendStartupHello = (client: HIDClient) =>
 
 const unmute = (unmute: boolean) =>
   new Promise<void>((resolve, reject) => {
-    console.log('Recording:', unmute);
+    console.log('[recording] Recording:', unmute);
     const proc = child_process.spawn('osascript', ['-e', `set volume input volume ${unmute ? 100 : 0}`], {
       stdio: 'inherit',
     });
@@ -39,7 +39,7 @@ const processUpdates = (client: HIDClient) =>
     concatMap((recording) =>
       concat(unmute(recording), sendAck(client, recording)).pipe(
         catchError((error) => {
-          console.error('Failed to process recording update:', error);
+          console.error('[recording] Failed to process recording update:', error);
           return EMPTY;
         }),
       ),

@@ -36,7 +36,7 @@ const processUpdates = (client: HIDClient) =>
     return client.data().pipe(
       filter((buffer) => buffer.length >= 3 && buffer[0] === InputMessage.WPM_KEYPRESS),
       map<Buffer, Influx.IPoint>((buf) => ({ fields: { wpm: buf[1], kp: buf[2] }, timestamp: new Date() })),
-      tap((point) => console.log(`WPM: ${point.fields!.wpm} (KP: ${point.fields!.kp})`)),
+      tap((point) => console.log(`[wpm] WPM: ${point.fields!.wpm} (KP: ${point.fields!.kp})`)),
       bufferTime(1000),
       filter((points) => points.length > 0),
       mergeMap((points) => influx.writeMeasurement(INFLUX_MEASUREMENT!, points)),
