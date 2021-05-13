@@ -18,17 +18,29 @@ const sendStartupHello = (client: HIDClient) =>
     delay(STARTUP_HELLO_INTERVAL),
   );
 
+const unmuteCommand = (unmute: boolean) => {
+  switch (process.platform) {
+    case 'linux':
+      return `pactl set-source-mute $(pacmd list-sources | awk '/* index:/{print $3}') ${unmute ? 0 : 1}`;
+    case 'darwin':
+      return `osascript -e "set volume input volume ${unmute ? 100 : 0}"`;
+    default:
+      throw new Error('unmute: unsupported platform');
+  }
+};
+
 const unmute = (unmute: boolean) =>
   new Promise<void>((resolve, reject) => {
     console.log('[recording] Recording:', unmute);
-    const proc = child_process.spawn('osascript', ['-e', `set volume input volume ${unmute ? 100 : 0}`], {
-      stdio: 'inherit',
-    });
-    proc.once('error', (error) => reject(error));
-    proc.once('exit', (code) => {
-      if (code === 0) resolve();
-      else if (code) reject(new Error(`Command exited with code ${code}`));
-      else reject(new Error(`Command was killed by signal ${proc.signalCode}`));
+    child_process.exec(unmuteCommand(unmute), (error, stdout, stderr) => {
+      process.stdout.write(stdout);
+      if (error) {
+        process.stderr.write(stderr);
+        if (error.code) reject(new Error(`Command exited with code ${error.code}`));
+        else if (error.signal) reject(new Error(`Command was killed by signal ${error.signal}`));
+      } else {
+        resolve();
+      }
     });
   });
 
