@@ -3,12 +3,7 @@ import { defer, from, merge, Observable, of, Subject, throwError } from 'rxjs';
 import { delay, finalize, first, repeat, repeatWhen, shareReplay, switchMap } from 'rxjs/operators';
 import usbDetection from 'usb-detection';
 
-export interface DeviceFilter {
-  vendorId?: number;
-  productId?: number;
-  usagePage?: number;
-  usage?: number;
-}
+export type DeviceFilter = Partial<Pick<HID.Device, 'vendorId' | 'productId' | 'usagePage' | 'usage'>>;
 
 const deviceAddEventsSubject = new Subject<usbDetection.Device>();
 usbDetection.startMonitoring();
